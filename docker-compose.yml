@@ -7,51 +7,45 @@ services:
     restart: unless-stopped
     ports:
       - "5678:5678"
+    env_file:
+      - .env                               # ← Loads all variables from .env
     environment:
-      # Basic Authentication (consider using secrets in production)
+      # Basic Auth
       - N8N_BASIC_AUTH_ACTIVE=true
-      - N8N_BASIC_AUTH_USER=learner
-      - N8N_BASIC_AUTH_PASSWORD=learning123
+      - N8N_BASIC_AUTH_USER=${N8N_BASIC_AUTH_USER}
+      - N8N_BASIC_AUTH_PASSWORD=${N8N_BASIC_AUTH_PASSWORD}
 
-      # General Settings
+      # General
       - N8N_HOST=localhost
       - N8N_PORT=5678
       - N8N_PROTOCOL=http
       - WEBHOOK_URL=http://localhost:5678/
-
-      # Editor Settings
       - N8N_EDITOR_BASE_URL=http://localhost:5678
 
-      # Timezone
+      # Timezone & logging
       - GENERIC_TIMEZONE=America/New_York
-
-      # Logging
       - N8N_LOG_LEVEL=info
-      - N8N_LOG_OUTPUT=console
 
       # Security
+      - N8N_ENCRYPTION_KEY=${N8N_ENCRYPTION_KEY}
       - N8N_SECURE_COOKIE=false
       - N8N_DIAGNOSTICS_ENABLED=false
-      
-      # Additional Security (recommended)
-      - N8N_ENCRYPTION_KEY=${N8N_ENCRYPTION_KEY:-your-encryption-key-here}
-      - N8N_USER_MANAGEMENT_DISABLED=false
-      
-      # Database (optional - for external DB)
-      # - DB_TYPE=sqlite
-      # - DB_SQLITE_VACUUM_ON_STARTUP=true
+
+      # PostgreSQL connection
+      - DB_TYPE=postgresdb
+      - DB_POSTGRESDB_DATABASE=${POSTGRES_DB}
+      - DB_POSTGRESDB_HOST=postgres
+      - DB_POSTGRESDB_PORT=5432
+      - DB_POSTGRESDB_USER=${POSTGRES_USER}
+      - DB_POSTGRESDB_PASSWORD=${N8N_DB_POSTGRESDB_PASSWORD}
 
       # Execution settings
       - EXECUTIONS_MODE=regular
-      - EXECUTIONS_DATA_MAX_AGE=168
-      - EXECUTIONS_DATA_PRUNE_MAX_COUNT=10000
 
     volumes:
       - n8n_data:/home/node/.n8n
-      # Only mount docker.sock if you need n8n to execute Docker operations
-      # - /var/run/docker.sock:/var/run/docker.sock
-
-    # Health check
+    depends_on:
+      - postgres
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:5678/healthz"]
       interval: 30s
@@ -59,19 +53,26 @@ services:
       retries: 3
       start_period: 40s
 
-    # Resource limits
-    deploy:
-      resources:
-        limits:
-          memory: 1G
-        reservations:
-          memory: 512M
-
-    # Optional: Add labels for organization
-    labels:
-      - "traefik.enable=false"
-      - "project=n8n-learning"
+  postgres:
+    image: postgres:16-alpine
+    container_name: n8n-postgres
+    restart: unless-stopped
+    env_file:
+      - .env                               # ← Also loads POSTGRES_* vars
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=${POSTGRES_DB}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
 volumes:
   n8n_data:
+    driver: local
+  postgres_data:
     driver: local
