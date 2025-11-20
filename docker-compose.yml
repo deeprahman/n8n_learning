@@ -1,0 +1,77 @@
+version: '3.8'
+
+services:
+  n8n:
+    image: docker.n8n.io/n8nio/n8n:latest
+    container_name: n8n-learning
+    restart: unless-stopped
+    ports:
+      - "5678:5678"
+    environment:
+      # Basic Authentication (consider using secrets in production)
+      - N8N_BASIC_AUTH_ACTIVE=true
+      - N8N_BASIC_AUTH_USER=learner
+      - N8N_BASIC_AUTH_PASSWORD=learning123
+
+      # General Settings
+      - N8N_HOST=localhost
+      - N8N_PORT=5678
+      - N8N_PROTOCOL=http
+      - WEBHOOK_URL=http://localhost:5678/
+
+      # Editor Settings
+      - N8N_EDITOR_BASE_URL=http://localhost:5678
+
+      # Timezone
+      - GENERIC_TIMEZONE=America/New_York
+
+      # Logging
+      - N8N_LOG_LEVEL=info
+      - N8N_LOG_OUTPUT=console
+
+      # Security
+      - N8N_SECURE_COOKIE=false
+      - N8N_DIAGNOSTICS_ENABLED=false
+      
+      # Additional Security (recommended)
+      - N8N_ENCRYPTION_KEY=${N8N_ENCRYPTION_KEY:-your-encryption-key-here}
+      - N8N_USER_MANAGEMENT_DISABLED=false
+      
+      # Database (optional - for external DB)
+      # - DB_TYPE=sqlite
+      # - DB_SQLITE_VACUUM_ON_STARTUP=true
+
+      # Execution settings
+      - EXECUTIONS_MODE=regular
+      - EXECUTIONS_DATA_MAX_AGE=168
+      - EXECUTIONS_DATA_PRUNE_MAX_COUNT=10000
+
+    volumes:
+      - n8n_data:/home/node/.n8n
+      # Only mount docker.sock if you need n8n to execute Docker operations
+      # - /var/run/docker.sock:/var/run/docker.sock
+
+    # Health check
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5678/healthz"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+        reservations:
+          memory: 512M
+
+    # Optional: Add labels for organization
+    labels:
+      - "traefik.enable=false"
+      - "project=n8n-learning"
+
+volumes:
+  n8n_data:
+    driver: local

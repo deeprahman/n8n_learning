@@ -1,0 +1,18 @@
+# Environment files
+.env
+.env.local
+
+# Data directories
+data/
+exports/
+
+# Logs
+*.log
+logs/
+
+# Docker
+docker-compose.override.yml
+
+# OS
+.DS_Store
+Thumbs.db
