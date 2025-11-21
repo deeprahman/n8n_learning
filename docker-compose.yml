@@ -1,77 +1,82 @@
-version: '3.8'
+version: '3.9'
 
 services:
   n8n:
     image: docker.n8n.io/n8nio/n8n:latest
-    container_name: n8n-learning
     restart: unless-stopped
-    ports:
-      - "5678:5678"
+    container_name: n8n
     environment:
-      # Basic Authentication (consider using secrets in production)
-      - N8N_BASIC_AUTH_ACTIVE=true
-      - N8N_BASIC_AUTH_USER=learner
-      - N8N_BASIC_AUTH_PASSWORD=learning123
-
-      # General Settings
-      - N8N_HOST=localhost
+      - N8N_HOST=${DOMAIN}
       - N8N_PORT=5678
-      - N8N_PROTOCOL=http
-      - WEBHOOK_URL=http://localhost:5678/
-
-      # Editor Settings
-      - N8N_EDITOR_BASE_URL=http://localhost:5678
-
-      # Timezone
-      - GENERIC_TIMEZONE=America/New_York
-
-      # Logging
-      - N8N_LOG_LEVEL=info
-      - N8N_LOG_OUTPUT=console
-
-      # Security
-      - N8N_SECURE_COOKIE=false
-      - N8N_DIAGNOSTICS_ENABLED=false
-      
-      # Additional Security (recommended)
-      - N8N_ENCRYPTION_KEY=${N8N_ENCRYPTION_KEY:-your-encryption-key-here}
-      - N8N_USER_MANAGEMENT_DISABLED=false
-      
-      # Database (optional - for external DB)
-      # - DB_TYPE=sqlite
-      # - DB_SQLITE_VACUUM_ON_STARTUP=true
-
-      # Execution settings
+      - N8N_PROTOCOL=https
+      - WEBHOOK_URL=https://${DOMAIN}/
+      - N8N_EDITOR_BASE_URL=https://${DOMAIN}
+      - DB_TYPE=postgresdb
+      - DB_POSTGRESDB_HOST=postgres
+      - DB_POSTGRESDB_PORT=5432
+      - DB_POSTGRESDB_DATABASE=${POSTGRES_DB}
+      - DB_POSTGRESDB_USER=${POSTGRES_USER}
+      - DB_POSTGRESDB_PASSWORD=${POSTGRES_PASSWORD}
+      - N8N_ENCRYPTION_KEY=${N8N_ENCRYPTION_KEY}
+      - N8N_SECURE_COOKIE=true
+      - GENERIC_TIMEZONE=${TZ}
       - EXECUTIONS_MODE=regular
-      - EXECUTIONS_DATA_MAX_AGE=168
-      - EXECUTIONS_DATA_PRUNE_MAX_COUNT=10000
-
     volumes:
       - n8n_data:/home/node/.n8n
-      # Only mount docker.sock if you need n8n to execute Docker operations
-      - /var/run/docker.sock:/var/run/docker.sock
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - n8n_network
 
-    # Health check
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    container_name: n8n-postgres
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=${POSTGRES_DB}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:5678/healthz"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - n8n_network
 
-    # Resource limits
-    deploy:
-      resources:
-        limits:
-          memory: 1G
-        reservations:
-          memory: 512M
+  nginx:
+    image: nginx:stable-alpine
+    restart: unless-stopped
+    container_name: n8n-nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/conf.d:/etc/nginx/conf.d:ro
+      - certbot-webroot:/var/www/html
+      - certbot-certs:/etc/letsencrypt:ro
+    depends_on:
+      - n8n
+    networks:
+      - n8n_network
 
-    # Optional: Add labels for organization
-    labels:
-      - "traefik.enable=false"
-      - "project=n8n-learning"
+  certbot:
+    image: certbot/certbot:latest
+    container_name: certbot
+    volumes:
+      - certbot-webroot:/var/www/html
+      - certbot-certs:/etc/letsencrypt
+    entrypoint: "/bin/sh -c 'trap exit TERM; while :; do certbot renew; sleep 12h & wait $${!}; done;'"
 
 volumes:
   n8n_data:
-    driver: local
+  postgres_data:
+  certbot-certs:
+  certbot-webroot:
+
+networks:
+  n8n_network:
+    driver: bridge
