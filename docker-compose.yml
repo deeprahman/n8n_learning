@@ -32,11 +32,11 @@ services:
       # Security
       - N8N_SECURE_COOKIE=false
       - N8N_DIAGNOSTICS_ENABLED=false
-      
+
       # Additional Security (recommended)
       - N8N_ENCRYPTION_KEY=${N8N_ENCRYPTION_KEY:-your-encryption-key-here}
       - N8N_USER_MANAGEMENT_DISABLED=false
-      
+
       # Database (optional - for external DB)
       # - DB_TYPE=sqlite
       # - DB_SQLITE_VACUUM_ON_STARTUP=true
@@ -46,6 +46,12 @@ services:
       - EXECUTIONS_DATA_MAX_AGE=168
       - EXECUTIONS_DATA_PRUNE_MAX_COUNT=10000
 
+      - DB_SQLITE_POOL_SIZE=1       # Allow concurrent requests
+      - N8N_RUNNERS_ENABLED=true    # Protect form n8n node craching
+      - N8N_BLOCK_ENV_ACCESS_IN_NODE=false    # block assess to env variable for the code node
+      - N8N_GIT_NODE_DISABLE_BARE_REPOS=true  # Block bare git repo access
+      - N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS=true # restric setting file permissin inside the container
+
     volumes:
       - n8n_data:/home/node/.n8n
       # Only mount docker.sock if you need n8n to execute Docker operations
@@ -53,7 +59,7 @@ services:
 
     # Health check
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:5678/healthz"]
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:5678/healthz"]
       interval: 30s
       timeout: 10s
       retries: 3
